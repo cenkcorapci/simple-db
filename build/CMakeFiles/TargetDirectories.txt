@@ -1,3 +1,0 @@
-/home/runner/work/simple-db/simple-db/build/CMakeFiles/simpledb.dir
-/home/runner/work/simple-db/simple-db/build/CMakeFiles/edit_cache.dir
-/home/runner/work/simple-db/simple-db/build/CMakeFiles/rebuild_cache.dir
