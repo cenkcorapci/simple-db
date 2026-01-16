@@ -1,3 +1,0 @@
-/home/runner/work/simple-db/simple-db/_codeql_build_dir/CMakeFiles/simpledb.dir
-/home/runner/work/simple-db/simple-db/_codeql_build_dir/CMakeFiles/edit_cache.dir
-/home/runner/work/simple-db/simple-db/_codeql_build_dir/CMakeFiles/rebuild_cache.dir
