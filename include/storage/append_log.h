@@ -54,7 +54,6 @@ private:
     void write_record(const LogRecord& record);
     bool read_record(LogRecord& record);
     size_t serialize_record(const LogRecord& record, std::vector<char>& buffer);
-    bool deserialize_record(const std::vector<char>& buffer, LogRecord& record);
 };
 
 } // namespace storage

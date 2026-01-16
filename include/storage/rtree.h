@@ -74,7 +74,6 @@ private:
     void insert_internal(RTreeNode* node, const RTreeEntry& entry);
     RTreeNode* choose_leaf(RTreeNode* node, const BoundingBox& bbox);
     void split_node(RTreeNode* node);
-    void adjust_tree(RTreeNode* node);
     bool search_internal(RTreeNode* node, const std::string& key, size_t& offset);
     void range_search_internal(RTreeNode* node, const BoundingBox& query_box, 
                                std::vector<RTreeEntry>& results);

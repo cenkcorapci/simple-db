@@ -98,8 +98,20 @@ bool TransactionManager::write(uint64_t txn_id, const std::string& key, const st
         return false;
     }
     
-    // Add to write set (not written to store until commit)
-    txn->write_set.push_back({key, value});
+    // Check if key already exists in write set and update it
+    bool found = false;
+    for (auto& write : txn->write_set) {
+        if (write.first == key) {
+            write.second = value;
+            found = true;
+            break;
+        }
+    }
+    
+    // Add to write set if not found
+    if (!found) {
+        txn->write_set.push_back({key, value});
+    }
     
     return true;
 }

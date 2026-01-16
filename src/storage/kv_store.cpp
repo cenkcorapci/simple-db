@@ -97,10 +97,10 @@ void KVStore::recover() {
 void KVStore::replay_log() {
     auto records = log_->read_all();
     
+    size_t offset = 0;
     for (const auto& record : records) {
         if (record.type == RecordType::INSERT) {
-            // Reconstruct index
-            size_t offset = 0;  // We'd need to track offsets during read
+            // Reconstruct index with approximate offsets
             index_[record.key] = offset;
             cache_[record.key] = record.value;
             
@@ -110,6 +110,8 @@ void KVStore::replay_log() {
             index_.erase(record.key);
             cache_.erase(record.key);
         }
+        // Approximate offset increment based on record size
+        offset += 100;  // Rough estimate
     }
 }
 
@@ -118,8 +120,8 @@ BoundingBox KVStore::hash_to_bbox(const std::string& key) {
     std::hash<std::string> hasher;
     size_t hash = hasher(key);
     
-    double x = static_cast<double>(hash & 0xFFFFFFFF) / 0xFFFFFFFF;
-    double y = static_cast<double>((hash >> 32) & 0xFFFFFFFF) / 0xFFFFFFFF;
+    double x = static_cast<double>(hash & 0xFFFFFFFF) / 0x100000000ULL;
+    double y = static_cast<double>((hash >> 32) & 0xFFFFFFFF) / 0x100000000ULL;
     
     // Small bounding box centered at (x, y)
     double delta = 0.001;

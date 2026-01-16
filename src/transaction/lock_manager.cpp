@@ -104,35 +104,42 @@ void LockManager::release_all_locks(uint64_t txn_id) {
 bool LockManager::can_grant_lock(const LockQueue& queue, LockMode mode) {
     if (mode == LockMode::SHARED) {
         // Can grant shared lock if no exclusive lock holder
-        return queue.holder_exclusive == 0 && queue.requests.empty();
+        return queue.holder_exclusive == 0;
     } else {
         // Can grant exclusive lock if no holders at all
-        return queue.holder_exclusive == 0 && 
-               queue.holders_shared.empty() && 
-               queue.requests.empty();
+        return queue.holder_exclusive == 0 && queue.holders_shared.empty();
     }
 }
 
 void LockManager::grant_locks(LockQueue& queue) {
+    bool granted_any = false;
+    
     for (auto& request : queue.requests) {
         if (request.granted) {
             continue;
         }
         
-        if (can_grant_lock(queue, request.mode)) {
-            if (request.mode == LockMode::SHARED) {
-                queue.holders_shared.insert(request.txn_id);
-            } else {
+        // For exclusive locks, only grant if no other locks held
+        if (request.mode == LockMode::EXCLUSIVE) {
+            if (queue.holder_exclusive == 0 && queue.holders_shared.empty()) {
                 queue.holder_exclusive = request.txn_id;
+                request.granted = true;
+                granted_any = true;
+                break;  // Can only grant one exclusive lock
             }
-            request.granted = true;
-            queue.cv.notify_all();
-            
-            // For exclusive locks, can only grant one
-            if (request.mode == LockMode::EXCLUSIVE) {
-                break;
+        } else {
+            // For shared locks, grant if no exclusive lock held
+            if (queue.holder_exclusive == 0) {
+                queue.holders_shared.insert(request.txn_id);
+                request.granted = true;
+                granted_any = true;
+                // Continue to grant other shared locks
             }
         }
+    }
+    
+    if (granted_any) {
+        queue.cv.notify_all();
     }
 }
 
