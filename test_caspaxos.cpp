@@ -180,6 +180,9 @@ void test_caspaxos_delete() {
     paxos.set("delete_key", "delete_value");
     
     // Delete with correct old value
+    // Note: In this implementation, delete sets the value to empty string
+    // This is a design choice - keys are marked as deleted by having empty values
+    // rather than being removed from storage entirely
     bool result = paxos.del("delete_key", std::string("delete_value"));
     assert(result);
     

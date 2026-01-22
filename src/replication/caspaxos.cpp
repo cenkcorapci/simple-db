@@ -206,20 +206,5 @@ std::vector<AckMessage> CasPaxos::send_commit(const CommitMessage& msg) {
     return acks;
 }
 
-bool CasPaxos::check_cas_condition(const std::optional<std::string>& expected,
-                                   const std::optional<std::string>& actual) {
-    if (!expected.has_value()) {
-        // No condition, always passes
-        return true;
-    }
-    
-    if (!actual.has_value()) {
-        // Expected value but key doesn't exist
-        return false;
-    }
-    
-    return expected.value() == actual.value();
-}
-
 } // namespace replication
 } // namespace simpledb

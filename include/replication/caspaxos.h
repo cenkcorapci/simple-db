@@ -206,10 +206,6 @@ private:
     
     // Send COMMIT to all replicas and collect ACK responses
     std::vector<AckMessage> send_commit(const CommitMessage& msg);
-    
-    // Check if CAS condition is satisfied
-    bool check_cas_condition(const std::optional<std::string>& expected,
-                            const std::optional<std::string>& actual);
 };
 
 } // namespace replication

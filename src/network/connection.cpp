@@ -187,8 +187,9 @@ void Connection::handle_cas(const std::string& key, const std::string& old_value
     }
     
     // Perform CAS operation
+    // Use empty old_value or "null"/"NULL" string to indicate key doesn't exist
     std::optional<std::string> old_val;
-    if (old_value != "null" && old_value != "NULL") {
+    if (!old_value.empty() && old_value != "null" && old_value != "NULL") {
         old_val = old_value;
     }
     
