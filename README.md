@@ -12,6 +12,10 @@ A simple key-value database implemented in C++ with advanced features:
 - **R-tree Indexing**: Spatial indexing structure for efficient key lookup
 - **Append-Only Log**: Persistent storage with crash recovery
 - **Leader-Follower Replication**: Distributed replication for high availability
+- **CasPaxos Consensus**: Fault-tolerant consensus protocol for distributed coordination
+  - Compare-and-swap (CAS) atomic operations
+  - Majority quorum-based consensus
+  - Ballot-based versioning
 - **No External Dependencies**: Uses only C++ standard library
 
 ## Architecture
@@ -34,6 +38,10 @@ A simple key-value database implemented in C++ with advanced features:
 ### Replication Layer
 - **Leader-Follower**: Asynchronous replication from leader to followers
 - **Log Shipping**: Replicates append-only log entries
+- **CasPaxos Consensus**: Optional consensus protocol for fault-tolerant coordination
+  - Two-phase protocol (PREPARE/COMMIT)
+  - Ballot-based versioning for conflict resolution
+  - Majority quorum for operation acceptance
 
 ## Building
 
@@ -70,6 +78,8 @@ make
 - `--log <file>`: Log file path (default: simpledb.log)
 - `--role <leader|follower>`: Replication role (default: leader)
 - `--leader <host:port>`: Leader address (for follower role)
+- `--consensus`: Enable CasPaxos consensus protocol
+- `--node-id <id>`: Node ID for CasPaxos (default: 1)
 - `--help`: Show help message
 
 ## Usage
@@ -87,6 +97,7 @@ telnet localhost 7777
 SET key value      # Store a key-value pair
 GET key           # Retrieve a value by key
 DELETE key        # Delete a key-value pair
+CAS key old new   # Compare-and-swap (requires --consensus)
 ```
 
 #### Transaction Operations:
@@ -113,6 +124,24 @@ DELETE name
 OK
 GET name
 NOT_FOUND
+```
+
+#### CasPaxos consensus operations:
+```
+# Start server with consensus enabled
+./build/simpledb --consensus --node-id 1
+
+# Connect and use CAS
+CAS counter null 1
+OK
+GET counter
+OK 1
+CAS counter 1 2
+OK
+GET counter
+OK 2
+CAS counter 1 3
+ERROR: CAS failed - condition not met or no quorum
 ```
 
 #### Explicit transactions:
@@ -170,6 +199,14 @@ The database uses a simple text-based protocol:
 - Followers replay leader's append-only log
 - Basic implementation (full production would need heartbeats, catch-up, etc.)
 
+### CasPaxos Consensus
+- Two-phase protocol: PREPARE and COMMIT
+- Compare-and-swap (CAS) atomic operations
+- Ballot-based versioning for conflict resolution
+- Majority quorum (N/2 + 1) for operation acceptance
+- Single-node operation supported (quorum of 1)
+- Network communication stubs (for multi-node extension)
+
 ## Testing
 
 The database can be tested with multiple concurrent connections:
@@ -191,12 +228,13 @@ Both clients can perform operations concurrently with full ACID guarantees.
 
 This is a learning project with simplified implementations:
 - No query optimizer
-- Simple replication (no consensus protocol like Raft)
+- Simple replication (CasPaxos provides consensus but network layer needs extension for multi-node)
 - Limited error handling in some edge cases
 - No authentication/authorization
 - No SSL/TLS support
 - Fixed text protocol (no binary protocol)
 - R-tree is functional but not fully optimized
+- CasPaxos network communication stubs (single-node only in current implementation)
 
 ## License
 
