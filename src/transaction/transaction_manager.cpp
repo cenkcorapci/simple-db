@@ -26,7 +26,7 @@ bool TransactionManager::commit_transaction(uint64_t txn_id) {
     
     // Apply all writes in the write set
     for (const auto& write : txn->write_set) {
-        store_->put(txn_id, write.first, write.second);
+        store_->put_vector(txn_id, write.first, write.second);
     }
     
     // Commit to log
@@ -64,7 +64,7 @@ bool TransactionManager::rollback_transaction(uint64_t txn_id) {
     return true;
 }
 
-bool TransactionManager::read(uint64_t txn_id, const std::string& key, std::string& value) {
+bool TransactionManager::read(uint64_t txn_id, const std::string& key, storage::Vector& vector) {
     auto* txn = get_transaction(txn_id);
     if (!txn || txn->state != TxnState::ACTIVE) {
         return false;
@@ -78,16 +78,16 @@ bool TransactionManager::read(uint64_t txn_id, const std::string& key, std::stri
     // Check write set first (read your own writes)
     for (const auto& write : txn->write_set) {
         if (write.first == key) {
-            value = write.second;
+            vector = write.second;
             return true;
         }
     }
     
     // Read from store
-    return store_->get(key, value);
+    return store_->get_vector(key, vector);
 }
 
-bool TransactionManager::write(uint64_t txn_id, const std::string& key, const std::string& value) {
+bool TransactionManager::write(uint64_t txn_id, const std::string& key, const storage::Vector& vector) {
     auto* txn = get_transaction(txn_id);
     if (!txn || txn->state != TxnState::ACTIVE) {
         return false;
@@ -102,7 +102,7 @@ bool TransactionManager::write(uint64_t txn_id, const std::string& key, const st
     bool found = false;
     for (auto& write : txn->write_set) {
         if (write.first == key) {
-            write.second = value;
+            write.second = vector;
             found = true;
             break;
         }
@@ -110,7 +110,7 @@ bool TransactionManager::write(uint64_t txn_id, const std::string& key, const st
     
     // Add to write set if not found
     if (!found) {
-        txn->write_set.push_back({key, value});
+        txn->write_set.push_back({key, vector});
     }
     
     return true;
@@ -129,6 +129,11 @@ bool TransactionManager::remove(uint64_t txn_id, const std::string& key) {
     
     // Perform delete
     return store_->remove(txn_id, key);
+}
+
+std::vector<storage::SearchResult> TransactionManager::search(const storage::Vector& query, size_t k) {
+    // Search doesn't need a transaction or locks - it's a read-only operation
+    return store_->search_vectors(query, k);
 }
 
 Transaction* TransactionManager::get_transaction(uint64_t txn_id) {

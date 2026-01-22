@@ -1,6 +1,36 @@
 # SimpleDB Feature Implementation
 
-This document describes how each requirement from the problem statement has been implemented.
+This document describes how the vector database with HNSW has been implemented.
+
+## Core Feature: Vector Database with HNSW ✅
+
+**Implementation:**
+- HNSW (Hierarchical Navigable Small World) algorithm for similarity search
+- Vector storage and indexing in `src/storage/hnsw.cpp`
+- Support for both Euclidean distance and cosine similarity metrics
+
+**Key Components:**
+- `HNSW::insert()` - Add vectors to the hierarchical graph
+- `HNSW::search()` - Find k-nearest neighbors
+- `HNSW::get()` - Retrieve vector by key
+- `HNSW::remove()` - Mark vector as deleted
+- Probabilistic level assignment for balanced performance
+- Bidirectional graph connections with pruning
+
+**Algorithm Details:**
+- **M parameter**: Maximum number of connections per layer (default: 16)
+- **ef_construction**: Size of dynamic candidate list during construction (default: 200)
+- **Distance metrics**: Euclidean distance and cosine similarity
+- **Layer generation**: Probabilistic using exponential distribution
+- **Search strategy**: Greedy search starting from top layer down to layer 0
+
+**Usage:**
+```cpp
+HNSW hnsw(128);  // 128-dimensional vectors
+Vector vec = {0.1f, 0.2f, 0.3f, ...};
+hnsw.insert("key1", vec, offset);
+auto results = hnsw.search(query_vec, 10);  // Find 10 nearest neighbors
+```
 
 ## Requirement 1: Support for Concurrent Connections ✅
 
@@ -17,7 +47,7 @@ This document describes how each requirement from the problem statement has been
 
 **Testing:**
 - Multiple clients can connect simultaneously
-- Concurrent SET/GET operations work correctly
+- Concurrent INSERT/GET/SEARCH operations work correctly
 - Lock manager ensures isolation between transactions
 
 ## Requirement 2: Replication ✅
@@ -47,7 +77,7 @@ This document describes how each requirement from the problem statement has been
 **Usage:**
 ```bash
 # Start leader
-./build/simpledb --port 7777 --role leader
+./build/simpledb --port 7777 --dim 128 --role leader
 
 # Start follower
 ./build/simpledb --port 7778 --role follower --leader localhost:7777
@@ -65,38 +95,49 @@ This document describes how each requirement from the problem statement has been
 **Dependencies Used (all standard):**
 - `<string>`, `<vector>`, `<unordered_map>` - Data structures
 - `<mutex>`, `<thread>`, `<atomic>` - Concurrency
-- `<fstream>` - File I/O
+- `<fstream>`, `<iostream>` - File and console I/O
 - `<sys/socket.h>`, `<netinet/in.h>` - POSIX sockets (system API)
+- `<random>`, `<queue>`, `<cmath>` - Math and random utilities
 
 **Build Requirements:**
 - CMake 3.10+
 - C++17 compiler (GCC/Clang/MSVC)
 - POSIX-compliant OS for networking
 
-## Requirement 4: R-tree Implementation and Append-Only Log ✅
+## Requirement 4: Vector Storage and HNSW Implementation ✅
 
-### R-tree Implementation
+### HNSW Implementation
 
-**Location:** `src/storage/rtree.cpp`, `include/storage/rtree.h`
+**Location:** `src/storage/hnsw.cpp`, `include/storage/hnsw.h`
 
 **Features:**
-- Spatial indexing data structure
-- Keys mapped to 2D space via hash function
+- Hierarchical graph structure for fast similarity search
+- Configurable parameters (M, ef_construction)
+- Support for both distance metrics (Euclidean, cosine)
 - Efficient insertion and search operations
-- Node splitting when max capacity reached
 
 **Key Components:**
-- `RTree::insert()` - Add key with spatial bounds
-- `RTree::search()` - Find key in tree
-- `RTree::range_search()` - Query spatial range
-- `RTree::choose_leaf()` - Select best insertion node
-- `RTree::split_node()` - Balance tree on overflow
+- `HNSW::insert()` - Add vector with graph construction
+- `HNSW::search()` - k-NN search using greedy algorithm
+- `HNSW::search_layer()` - Layer-specific search
+- `HNSW::select_neighbors_heuristic()` - Neighbor selection for graph quality
+- `HNSW::get_random_level()` - Probabilistic level assignment
+
+**Graph Structure:**
+```
+Level 2: [entry_point]
+          |
+Level 1: [A]---[B]---[C]
+          |\    |    /|
+Level 0: [A]-[B]-[C]-[D]-[E]
+          (Most connected layer)
+```
 
 **Usage:**
 ```cpp
-RTree rtree(4);  // Max 4 entries per node
-BoundingBox bbox(0.0, 0.0, 1.0, 1.0);
-rtree.insert("key1", bbox, file_offset);
+HNSW hnsw(dimension, M=16, ef_construction=200, DistanceMetric::EUCLIDEAN);
+hnsw.insert(key, vector, offset);
+auto results = hnsw.search(query, k=10, ef_search=50);
 ```
 
 ### Append-Only Log
@@ -105,21 +146,26 @@ rtree.insert("key1", bbox, file_offset);
 
 **Features:**
 - Write-ahead logging for durability
+- Vector data serialization support
 - Sequential writes for performance
 - Crash recovery via log replay
-- Record types: INSERT, DELETE, COMMIT, CHECKPOINT
 
 **Key Components:**
 - `AppendLog::append()` - Write record to log
 - `AppendLog::read()` - Read record at offset
 - `AppendLog::read_all()` - Full log scan for recovery
 - `AppendLog::sync()` - Force flush to disk
-- `AppendLog::serialize_record()` - Binary serialization
+- `AppendLog::serialize_record()` - Binary serialization with vector support
 
 **Record Format:**
 ```
-[type:1][txn_id:8][timestamp:8][key_len:4][key][value_len:4][value]
+[type:1][txn_id:8][timestamp:8][is_vector:1][key_len:4][key][data_len:4][vector_data]
 ```
+
+**Implementation Note:**
+- Uses separate file streams for reading and writing
+- Write stream (`ofstream`) for appending
+- Read streams (`ifstream`) created on-demand for recovery
 
 ## Requirement 5: ACID Compliance ✅
 
@@ -149,7 +195,7 @@ rtree.insert("key1", bbox, file_offset);
 **Transaction API:**
 ```
 BEGIN              # Start transaction
-SET key value      # Buffered write
+INSERT key vector  # Buffered write
 GET key           # Read with lock
 COMMIT            # Make changes durable
 ROLLBACK          # Discard changes
@@ -166,6 +212,32 @@ ROLLBACK          # Discard changes
 - `LockManager` - Concurrency control
 - `AppendLog` - Durability
 - `KVStore` - Recovery
+
+## Vector Database Commands ✅
+
+### INSERT
+```
+INSERT key [v1,v2,v3,...]
+```
+Inserts a vector with the given key. Vector must match configured dimension.
+
+### GET
+```
+GET key
+```
+Retrieves the vector associated with the key.
+
+### SEARCH
+```
+SEARCH [v1,v2,v3,...] TOP k
+```
+Finds the k nearest neighbors to the query vector. Returns keys and distances.
+
+### DELETE
+```
+DELETE key
+```
+Removes the vector with the given key.
 
 ## Architecture Summary
 
@@ -187,8 +259,8 @@ ROLLBACK          # Discard changes
                │
 ┌──────────────▼──────────────────────────┐
 │         Storage Layer                   │
-│  - Key-Value Store                     │
-│  - R-tree Index                        │
+│  - Vector Store                        │
+│  - HNSW Index                          │
 │  - Append-Only Log                     │
 │  - Recovery Manager                    │
 └──────────────┬──────────────────────────┘
@@ -210,10 +282,11 @@ ROLLBACK          # Discard changes
 All features tested and verified:
 - ✅ Concurrent connections (tested with multiple telnet clients)
 - ✅ ACID transactions (BEGIN/COMMIT/ROLLBACK)
-- ✅ Basic operations (SET/GET/DELETE)
 - ✅ CasPaxos consensus (CAS operations with ballot-based versioning)
+- ✅ Vector operations (INSERT/GET/SEARCH/DELETE)
 - ✅ Persistence (log file created and read on restart)
-- ✅ R-tree indexing (integrated with KV store)
+- ✅ HNSW indexing (integrated with vector store)
+- ✅ Similarity search (Euclidean distance)
 - ✅ No external dependencies (clean build with stdlib only)
 
 Test files:
@@ -231,23 +304,26 @@ CodeQL analysis completed with 0 vulnerabilities found.
 
 ## Performance Characteristics
 
-- **Write Performance:** O(log n) for R-tree insertion + O(1) append to log
-- **Read Performance:** O(1) for cache hit, O(log n) for R-tree search
+- **Insert Performance:** O(log n) HNSW insertion + O(1) append to log
+- **Search Performance:** Sub-linear approximate nearest neighbor search
+- **Get Performance:** O(1) hash map lookup + O(1) HNSW access
 - **Transaction Overhead:** Two-phase locking with lock queues
 - **Replication:** Asynchronous, no impact on write latency
 - **Concurrency:** Thread-per-connection model
+- **Memory Usage:** All vectors kept in memory for fast access
 
 ## Limitations (By Design)
 
 This is a learning/demonstration project. Production systems would need:
-- Full multi-node CasPaxos with network implementation
+- HNSW parameter tuning per use case
+- Dynamic dimension configuration
 - Query optimizer and planner
 - Connection pooling and resource limits
 - Authentication and authorization
 - TLS/SSL for secure connections
 - Binary protocol for efficiency
 - More sophisticated deadlock detection
-- Full R-tree deletion support
+- Full vector deletion (current implementation marks as deleted)
 - Checkpointing and log compaction
 - Leader election for CasPaxos
 - Catch-up mechanism for replicas

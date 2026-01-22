@@ -1,15 +1,16 @@
 # simple-db
 
-A simple key-value database implemented in C++ with advanced features:
+A vector database implemented in C++ with HNSW (Hierarchical Navigable Small World) for efficient similarity search:
 
 ## Features
 
+- **HNSW Vector Search**: Hierarchical Navigable Small World algorithm for fast approximate nearest neighbor search
 - **Concurrent Connections**: Multi-threaded TCP server supporting multiple simultaneous client connections
 - **ACID Compliance**: Full transaction support with isolation and atomicity guarantees
   - BEGIN/COMMIT/ROLLBACK transaction commands
   - Two-phase locking for concurrency control
   - Write-ahead logging for durability
-- **R-tree Indexing**: Spatial indexing structure for efficient key lookup
+- **Flexible Distance Metrics**: Support for both Euclidean distance and cosine similarity
 - **Append-Only Log**: Persistent storage with crash recovery
 - **Leader-Follower Replication**: Distributed replication for high availability
 - **CasPaxos Consensus**: Fault-tolerant consensus protocol for distributed coordination
@@ -22,8 +23,8 @@ A simple key-value database implemented in C++ with advanced features:
 
 ### Storage Layer
 - **Append-Only Log**: Durable write-ahead log for all operations
-- **R-tree Index**: Spatial data structure for efficient key-value lookups
-- **In-Memory Cache**: Fast access to frequently used data
+- **HNSW Index**: Hierarchical graph structure for efficient similarity search
+- **In-Memory Index**: Fast access to vector data
 
 ### Transaction Layer
 - **Transaction Manager**: Handles transaction lifecycle (begin, commit, rollback)
@@ -65,17 +66,18 @@ make
 
 ### Start a leader server:
 ```bash
-./build/simpledb --port 7777 --log simpledb.log --role leader
+./build/simpledb --port 7777 --log simpledb.log --dim 128 --role leader
 ```
 
 ### Start a follower server:
 ```bash
-./build/simpledb --port 7778 --log replica.log --role follower --leader localhost:7777
+./build/simpledb --port 7778 --log replica.log --dim 128 --role follower --leader localhost:7777
 ```
 
 ### Command-line options:
 - `--port <port>`: Server port (default: 7777)
 - `--log <file>`: Log file path (default: simpledb.log)
+- `--dim <dimension>`: Vector dimension (default: 128)
 - `--role <leader|follower>`: Replication role (default: leader)
 - `--leader <host:port>`: Leader address (for follower role)
 - `--consensus`: Enable CasPaxos consensus protocol
@@ -92,12 +94,12 @@ telnet localhost 7777
 
 ### Commands
 
-#### Basic Operations:
+#### Vector Operations:
 ```
-SET key value      # Store a key-value pair
-GET key           # Retrieve a value by key
-DELETE key        # Delete a key-value pair
-CAS key old new   # Compare-and-swap (requires --consensus)
+INSERT key [v1,v2,v3,...]    # Insert a vector
+GET key                      # Retrieve a vector by key
+SEARCH [v1,v2,v3,...] TOP k  # Find k nearest neighbors
+DELETE key                   # Delete a vector
 ```
 
 #### Transaction Operations:
@@ -114,16 +116,26 @@ QUIT              # Close connection
 
 ### Examples
 
-#### Auto-commit mode (single operations):
+#### Insert and retrieve vectors:
 ```
-SET name Alice
+INSERT vec1 [1.0,0.0,0.0]
 OK
-GET name
-OK Alice
-DELETE name
+GET vec1
+OK [1.000000,0.000000,0.000000]
+```
+
+#### Similarity search:
+```
+INSERT embedding1 [0.1,0.2,0.3,0.4]
 OK
-GET name
-NOT_FOUND
+INSERT embedding2 [0.2,0.3,0.4,0.5]
+OK
+INSERT embedding3 [0.9,0.8,0.7,0.6]
+OK
+SEARCH [0.15,0.25,0.35,0.45] TOP 2
+OK 2 results
+embedding2 distance=0.141421
+embedding1 distance=0.244949
 ```
 
 #### CasPaxos consensus operations:
@@ -145,26 +157,23 @@ ERROR: CAS failed - condition not met or no quorum
 ```
 
 #### Explicit transactions:
+#### Transactions:
 ```
 BEGIN
 OK
-SET account1 100
+INSERT vec1 [1.0,2.0,3.0]
 OK
-SET account2 200
+INSERT vec2 [4.0,5.0,6.0]
 OK
 COMMIT
 OK
 ```
 
-#### Transaction rollback:
+#### Deletion:
 ```
-BEGIN
+DELETE vec1
 OK
-SET balance 1000
-OK
-ROLLBACK
-OK
-GET balance
+GET vec1
 NOT_FOUND
 ```
 
@@ -172,8 +181,9 @@ NOT_FOUND
 
 The database uses a simple text-based protocol:
 - Commands are newline-terminated
+- Vectors are formatted as comma-separated floats in square brackets: `[v1,v2,v3,...]`
 - Responses start with OK, ERROR, or NOT_FOUND
-- Multi-word values are space-separated
+- Search results include similarity distances
 
 ## ACID Guarantees
 
@@ -184,15 +194,16 @@ The database uses a simple text-based protocol:
 
 ## Implementation Details
 
-### R-tree
-- Max entries per node: 4 (configurable)
-- Keys are mapped to 2D space using hash function
-- Provides efficient spatial queries (though not currently exposed via API)
+### HNSW Algorithm
+- Hierarchical graph structure with multiple layers
+- Probabilistic layer assignment for balanced search
+- Configurable parameters: M (max connections), ef_construction (build time quality)
+- Supports both Euclidean distance and cosine similarity metrics
 
 ### Locking
 - Shared locks for reads
 - Exclusive locks for writes
-- Deadlock prevention through lock ordering (simple implementation)
+- Deadlock prevention through lock ordering
 
 ### Replication
 - Asynchronous log shipping
@@ -213,7 +224,7 @@ The database can be tested with multiple concurrent connections:
 
 ```bash
 # Terminal 1
-./build/simpledb
+./build/simpledb --dim 128
 
 # Terminal 2
 telnet localhost 7777
@@ -227,16 +238,18 @@ Both clients can perform operations concurrently with full ACID guarantees.
 ## Limitations
 
 This is a learning project with simplified implementations:
+- Fixed vector dimension per database instance
 - No query optimizer
 - Simple replication (CasPaxos provides consensus but network layer needs extension for multi-node)
 - Limited error handling in some edge cases
 - No authentication/authorization
 - No SSL/TLS support
 - Fixed text protocol (no binary protocol)
-- R-tree is functional but not fully optimized
 - CasPaxos network communication stubs (single-node only in current implementation)
+- HNSW parameters are not dynamically tunable
 
 ## License
 
 See LICENSE file.
+
 

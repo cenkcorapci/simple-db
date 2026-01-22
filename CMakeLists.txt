@@ -17,7 +17,7 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 set(SOURCES
     src/main.cpp
     src/storage/append_log.cpp
-    src/storage/rtree.cpp
+    src/storage/hnsw.cpp
     src/storage/kv_store.cpp
     src/transaction/transaction_manager.cpp
     src/transaction/lock_manager.cpp

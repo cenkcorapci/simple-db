@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <sstream>
 #include <iostream>
+#include <iomanip>
 
 namespace simpledb {
 namespace network {
@@ -20,7 +21,7 @@ Connection::~Connection() {
 }
 
 void Connection::handle() {
-    write_line("SimpleDB v1.0 - Ready");
+    write_line("SimpleDB v2.0 - Vector Database with HNSW - Ready");
     
     while (true) {
         std::string line = read_line();
@@ -59,6 +60,46 @@ void Connection::write_line(const std::string& line) {
     write(socket_fd_, msg.c_str(), msg.length());
 }
 
+storage::Vector Connection::parse_vector(const std::string& vec_str) {
+    storage::Vector vec;
+    std::string cleaned = vec_str;
+    
+    // Remove brackets if present
+    if (!cleaned.empty() && cleaned[0] == '[') {
+        cleaned = cleaned.substr(1);
+    }
+    if (!cleaned.empty() && cleaned.back() == ']') {
+        cleaned = cleaned.substr(0, cleaned.length() - 1);
+    }
+    
+    // Parse comma-separated floats
+    std::istringstream iss(cleaned);
+    std::string token;
+    while (std::getline(iss, token, ',')) {
+        try {
+            float value = std::stof(token);
+            vec.push_back(value);
+        } catch (const std::exception& e) {
+            std::cerr << "[WARN] Failed to parse vector component '" << token << "': " << e.what() << std::endl;
+            // Return empty vector on parsing error
+            return storage::Vector();
+        }
+    }
+    
+    return vec;
+}
+
+std::string Connection::vector_to_string(const storage::Vector& vec) {
+    std::ostringstream oss;
+    oss << "[";
+    for (size_t i = 0; i < vec.size(); ++i) {
+        if (i > 0) oss << ",";
+        oss << std::fixed << std::setprecision(6) << vec[i];
+    }
+    oss << "]";
+    return oss.str();
+}
+
 void Connection::process_command(const std::string& command) {
     std::istringstream iss(command);
     std::string cmd;
@@ -68,15 +109,36 @@ void Connection::process_command(const std::string& command) {
         std::string key;
         iss >> key;
         handle_get(key);
-    } else if (cmd == "SET") {
-        std::string key, value;
+    } else if (cmd == "INSERT") {
+        std::string key;
         iss >> key;
-        std::getline(iss, value);
+        std::string vector_str;
+        std::getline(iss, vector_str);
         // Trim leading space
-        if (!value.empty() && value[0] == ' ') {
-            value = value.substr(1);
+        if (!vector_str.empty() && vector_str[0] == ' ') {
+            vector_str = vector_str.substr(1);
         }
-        handle_set(key, value);
+        handle_insert(key, vector_str);
+    } else if (cmd == "SEARCH") {
+        std::string vector_str;
+        std::getline(iss, vector_str);
+        // Trim leading space
+        if (!vector_str.empty() && vector_str[0] == ' ') {
+            vector_str = vector_str.substr(1);
+        }
+        
+        // Extract k value if present
+        size_t k = 10;  // default
+        size_t k_pos = vector_str.find("TOP");
+        if (k_pos != std::string::npos) {
+            std::string vec_part = vector_str.substr(0, k_pos);
+            std::string k_part = vector_str.substr(k_pos + 3);
+            std::istringstream k_iss(k_part);
+            k_iss >> k;
+            vector_str = vec_part;
+        }
+        
+        handle_search(vector_str, k);
     } else if (cmd == "DELETE") {
         std::string key;
         iss >> key;
@@ -97,7 +159,7 @@ void Connection::process_command(const std::string& command) {
     } else if (cmd == "ROLLBACK") {
         handle_rollback();
     } else {
-        write_line("ERROR: Unknown command");
+        write_line("ERROR: Unknown command. Available: INSERT, GET, SEARCH, DELETE, BEGIN, COMMIT, ROLLBACK, QUIT");
     }
 }
 
@@ -114,19 +176,19 @@ void Connection::handle_get(const std::string& key) {
     }
     
     // Otherwise use transaction manager
-    std::string value;
+    storage::Vector vector;
     
     if (in_transaction_) {
-        if (txn_mgr_->read(current_txn_id_, key, value)) {
-            write_line("OK " + value);
+        if (txn_mgr_->read(current_txn_id_, key, vector)) {
+            write_line("OK " + vector_to_string(vector));
         } else {
             write_line("NOT_FOUND");
         }
     } else {
         // Auto-commit transaction for single operation
         uint64_t txn_id = txn_mgr_->begin_transaction();
-        if (txn_mgr_->read(txn_id, key, value)) {
-            write_line("OK " + value);
+        if (txn_mgr_->read(txn_id, key, vector)) {
+            write_line("OK " + vector_to_string(vector));
         } else {
             write_line("NOT_FOUND");
         }
@@ -134,23 +196,52 @@ void Connection::handle_get(const std::string& key) {
     }
 }
 
-void Connection::handle_set(const std::string& key, const std::string& value) {
+void Connection::handle_insert(const std::string& key, const std::string& vector_str) {
+    storage::Vector vector = parse_vector(vector_str);
+    
+    if (vector.empty()) {
+        write_line("ERROR: Invalid vector format. Use: INSERT key [v1,v2,v3,...]");
+        return;
+    }
+    
     if (in_transaction_) {
-        if (txn_mgr_->write(current_txn_id_, key, value)) {
+        if (txn_mgr_->write(current_txn_id_, key, vector)) {
             write_line("OK");
         } else {
-            write_line("ERROR: Write failed");
+            write_line("ERROR: Insert failed");
         }
     } else {
         // Auto-commit transaction for single operation
         uint64_t txn_id = txn_mgr_->begin_transaction();
-        if (txn_mgr_->write(txn_id, key, value)) {
+        if (txn_mgr_->write(txn_id, key, vector)) {
             txn_mgr_->commit_transaction(txn_id);
             write_line("OK");
         } else {
             txn_mgr_->rollback_transaction(txn_id);
-            write_line("ERROR: Write failed");
+            write_line("ERROR: Insert failed");
         }
+    }
+}
+
+void Connection::handle_search(const std::string& vector_str, size_t k) {
+    storage::Vector query = parse_vector(vector_str);
+    
+    if (query.empty()) {
+        write_line("ERROR: Invalid vector format. Use: SEARCH [v1,v2,v3,...] TOP k");
+        return;
+    }
+    
+    auto results = txn_mgr_->search(query, k);
+    
+    if (results.empty()) {
+        write_line("OK 0 results");
+    } else {
+        std::ostringstream oss;
+        oss << "OK " << results.size() << " results";
+        for (const auto& result : results) {
+            oss << "\r\n" << result.key << " distance=" << std::fixed << std::setprecision(6) << result.distance;
+        }
+        write_line(oss.str());
     }
 }
 
