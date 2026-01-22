@@ -37,6 +37,8 @@ A simple key-value database implemented in C++ with advanced features:
 
 ## Building
 
+### Native Build
+
 Requires:
 - CMake 3.10+
 - C++17 compiler (GCC, Clang, or MSVC)
@@ -48,6 +50,48 @@ make build
 Or manually:
 ```bash
 mkdir build
+cd build
+cmake ..
+make
+```
+
+### Docker Build
+
+Build and run using Docker:
+
+```bash
+# Build the Docker image (using Debian-based image)
+docker build -f Dockerfile.debian -t simpledb:latest .
+
+# Or use Alpine Linux (busybox-based) for smaller image
+docker build -f Dockerfile -t simpledb:alpine .
+
+# Run a single instance
+docker run -p 7777:7777 simpledb:latest
+```
+
+### Docker Compose - Distributed Setup
+
+Run a complete distributed setup with leader and followers:
+
+```bash
+# Start all services (1 leader + 2 followers)
+docker compose up -d
+
+# Check service status
+docker compose ps
+
+# View logs
+docker compose logs -f
+
+# Stop all services
+docker compose down
+```
+
+The docker compose setup includes:
+- **Leader** on port 7777
+- **Follower 1** on port 7778
+- **Follower 2** on port 7779
 cd build
 cmake ..
 make
@@ -172,6 +216,8 @@ The database uses a simple text-based protocol:
 
 ## Testing
 
+### Manual Testing
+
 The database can be tested with multiple concurrent connections:
 
 ```bash
@@ -186,6 +232,41 @@ telnet localhost 7777
 ```
 
 Both clients can perform operations concurrently with full ACID guarantees.
+
+### Integration Tests
+
+Run comprehensive integration tests for the distributed setup:
+
+```bash
+# Start the distributed environment
+docker compose up -d
+
+# Run integration tests
+docker compose run --rm test-runner
+
+# Or use the test profile
+docker compose --profile test up --abort-on-container-exit
+```
+
+The integration test suite includes:
+- **Basic Replication**: Tests data replication from leader to followers
+- **ACID Transactions**: Tests transaction BEGIN/COMMIT/ROLLBACK
+- **Concurrent Operations**: Tests multiple simultaneous operations
+- **Leader Availability**: Tests leader service reliability
+- **DELETE Operations**: Tests data deletion functionality
+- **Network Connectivity**: Verifies network communication between nodes
+- **Stress Testing**: Tests multiple sequential transactions
+- **Data Persistence**: Verifies data persists across operations
+- **Follower Health**: Checks follower services are running correctly
+
+### Failure Scenarios Tested
+
+The integration tests specifically check:
+1. Leader node handling multiple concurrent clients
+2. Transaction isolation and atomicity
+3. Data consistency across operations
+4. Network connectivity in distributed setup
+5. Service health and availability
 
 ## Limitations
 
