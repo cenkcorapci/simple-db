@@ -75,9 +75,12 @@ storage::Vector Connection::parse_vector(const std::string& vec_str) {
     std::string token;
     while (std::getline(iss, token, ',')) {
         try {
-            vec.push_back(std::stof(token));
-        } catch (...) {
-            // Skip invalid values
+            float value = std::stof(token);
+            vec.push_back(value);
+        } catch (const std::exception& e) {
+            std::cerr << "[WARN] Failed to parse vector component '" << token << "': " << e.what() << std::endl;
+            // Return empty vector on parsing error
+            return storage::Vector();
         }
     }
     

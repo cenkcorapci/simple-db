@@ -92,20 +92,23 @@ void HNSW::insert(const std::string& key, const Vector& vector, size_t offset) {
         for (const auto& neighbor_key : neighbors) {
             node->neighbors[lc].insert(neighbor_key);
             
-            // Make sure neighbor node has enough levels
-            auto& neighbor_node = nodes_[neighbor_key];
-            if (lc < static_cast<int>(neighbor_node->neighbors.size())) {
-                neighbor_node->neighbors[lc].insert(key);
-                
-                // Prune neighbors if needed
-                auto& neighbor_connections = neighbor_node->neighbors[lc];
-                if (neighbor_connections.size() > M) {
-                    std::vector<std::string> neighbor_list(neighbor_connections.begin(), 
-                                                           neighbor_connections.end());
-                    auto pruned = select_neighbors_heuristic(neighbor_list, 
-                                                            neighbor_node->vector, M);
-                    neighbor_connections.clear();
-                    neighbor_connections.insert(pruned.begin(), pruned.end());
+            // Make sure neighbor exists and has enough levels
+            auto neighbor_it = nodes_.find(neighbor_key);
+            if (neighbor_it != nodes_.end()) {
+                auto& neighbor_node = neighbor_it->second;
+                if (lc < static_cast<int>(neighbor_node->neighbors.size())) {
+                    neighbor_node->neighbors[lc].insert(key);
+                    
+                    // Prune neighbors if needed
+                    auto& neighbor_connections = neighbor_node->neighbors[lc];
+                    if (neighbor_connections.size() > M) {
+                        std::vector<std::string> neighbor_list(neighbor_connections.begin(), 
+                                                               neighbor_connections.end());
+                        auto pruned = select_neighbors_heuristic(neighbor_list, 
+                                                                neighbor_node->vector, M);
+                        neighbor_connections.clear();
+                        neighbor_connections.insert(pruned.begin(), pruned.end());
+                    }
                 }
             }
         }
@@ -154,7 +157,8 @@ std::vector<std::string> HNSW::search_layer(const Vector& query,
         candidates.pop();
         
         // If current is farther than furthest result, stop
-        if (!results.empty() && results.size() >= ef && current.first > results.top().first) {
+        size_t results_size = results.size();
+        if (results_size >= ef && current.first > results.top().first) {
             break;
         }
         
@@ -171,12 +175,14 @@ std::vector<std::string> HNSW::search_layer(const Vector& query,
                     
                     float d = compute_distance(query, nodes_[neighbor_key]->vector);
                     
-                    if (results.size() < ef || d < results.top().first) {
+                    if (results_size < ef || d < results.top().first) {
                         candidates.push({d, neighbor_key});
                         results.push({d, neighbor_key});
+                        results_size = results.size();
                         
-                        if (results.size() > ef) {
+                        if (results_size > ef) {
                             results.pop();
+                            results_size = results.size();
                         }
                     }
                 }

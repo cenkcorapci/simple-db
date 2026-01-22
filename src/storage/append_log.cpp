@@ -2,6 +2,7 @@
 #include <cstring>
 #include <chrono>
 #include <iostream>
+#include <stdexcept>
 
 namespace simpledb {
 namespace storage {
@@ -19,7 +20,7 @@ AppendLog::AppendLog(const std::string& filename)
     write_file_.open(filename_, std::ios::out | std::ios::binary | std::ios::app);
     
     if (!write_file_.is_open()) {
-        std::cerr << "[ERROR] Failed to open log file: " << filename_ << std::endl;
+        throw std::runtime_error("Failed to open log file: " + filename_);
     }
 }
 
