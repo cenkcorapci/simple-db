@@ -2,6 +2,7 @@
 #define SIMPLE_DB_CONNECTION_H
 
 #include "transaction/transaction_manager.h"
+#include "replication/caspaxos.h"
 #include <string>
 #include <memory>
 
@@ -11,7 +12,8 @@ namespace network {
 // Connection handler for client connections
 class Connection {
 public:
-    Connection(int socket_fd, std::shared_ptr<transaction::TransactionManager> txn_mgr);
+    Connection(int socket_fd, std::shared_ptr<transaction::TransactionManager> txn_mgr,
+               std::shared_ptr<replication::CasPaxos> paxos = nullptr);
     ~Connection();
     
     void handle();  // Main connection handler loop
@@ -19,6 +21,7 @@ public:
 private:
     int socket_fd_;
     std::shared_ptr<transaction::TransactionManager> txn_mgr_;
+    std::shared_ptr<replication::CasPaxos> paxos_;
     uint64_t current_txn_id_;
     bool in_transaction_;
     
@@ -31,6 +34,7 @@ private:
     void handle_insert(const std::string& key, const std::string& vector_str);
     void handle_search(const std::string& vector_str, size_t k);
     void handle_delete(const std::string& key);
+    void handle_cas(const std::string& key, const std::string& old_value, const std::string& new_value);
     void handle_begin();
     void handle_commit();
     void handle_rollback();

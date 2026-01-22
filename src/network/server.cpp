@@ -8,8 +8,9 @@
 namespace simpledb {
 namespace network {
 
-Server::Server(int port, std::shared_ptr<transaction::TransactionManager> txn_mgr)
-    : port_(port), server_fd_(-1), txn_mgr_(txn_mgr), running_(false) {
+Server::Server(int port, std::shared_ptr<transaction::TransactionManager> txn_mgr,
+               std::shared_ptr<replication::CasPaxos> paxos)
+    : port_(port), server_fd_(-1), txn_mgr_(txn_mgr), paxos_(paxos), running_(false) {
 }
 
 Server::~Server() {
@@ -108,7 +109,7 @@ void Server::accept_connections() {
 }
 
 void Server::handle_connection(int client_fd) {
-    Connection conn(client_fd, txn_mgr_);
+    Connection conn(client_fd, txn_mgr_, paxos_);
     conn.handle();
 }
 

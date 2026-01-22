@@ -7,8 +7,10 @@
 namespace simpledb {
 namespace network {
 
-Connection::Connection(int socket_fd, std::shared_ptr<transaction::TransactionManager> txn_mgr)
-    : socket_fd_(socket_fd), txn_mgr_(txn_mgr), current_txn_id_(0), in_transaction_(false) {
+Connection::Connection(int socket_fd, std::shared_ptr<transaction::TransactionManager> txn_mgr,
+                       std::shared_ptr<replication::CasPaxos> paxos)
+    : socket_fd_(socket_fd), txn_mgr_(txn_mgr), paxos_(paxos), 
+      current_txn_id_(0), in_transaction_(false) {
 }
 
 Connection::~Connection() {
@@ -141,6 +143,15 @@ void Connection::process_command(const std::string& command) {
         std::string key;
         iss >> key;
         handle_delete(key);
+    } else if (cmd == "CAS") {
+        std::string key, old_value, new_value;
+        iss >> key >> old_value;
+        std::getline(iss, new_value);
+        // Trim leading space
+        if (!new_value.empty() && new_value[0] == ' ') {
+            new_value = new_value.substr(1);
+        }
+        handle_cas(key, old_value, new_value);
     } else if (cmd == "BEGIN") {
         handle_begin();
     } else if (cmd == "COMMIT") {
@@ -153,6 +164,18 @@ void Connection::process_command(const std::string& command) {
 }
 
 void Connection::handle_get(const std::string& key) {
+    // If CasPaxos is enabled, read from it
+    if (paxos_) {
+        auto value = paxos_->get(key);
+        if (value.has_value()) {
+            write_line("OK " + value.value());
+        } else {
+            write_line("NOT_FOUND");
+        }
+        return;
+    }
+    
+    // Otherwise use transaction manager
     storage::Vector vector;
     
     if (in_transaction_) {
@@ -239,6 +262,33 @@ void Connection::handle_delete(const std::string& key) {
             txn_mgr_->rollback_transaction(txn_id);
             write_line("ERROR: Delete failed");
         }
+    }
+}
+
+void Connection::handle_cas(const std::string& key, const std::string& old_value, 
+                            const std::string& new_value) {
+    if (!paxos_) {
+        write_line("ERROR: CasPaxos not enabled");
+        return;
+    }
+    
+    if (in_transaction_) {
+        write_line("ERROR: CAS not supported in transactions");
+        return;
+    }
+    
+    // Perform CAS operation
+    // Use empty old_value or "null"/"NULL" string to indicate key doesn't exist
+    std::optional<std::string> old_val;
+    if (!old_value.empty() && old_value != "null" && old_value != "NULL") {
+        old_val = old_value;
+    }
+    
+    bool success = paxos_->cas(key, old_val, new_value);
+    if (success) {
+        write_line("OK");
+    } else {
+        write_line("ERROR: CAS failed - condition not met or no quorum");
     }
 }
 

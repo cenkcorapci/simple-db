@@ -3,6 +3,7 @@
 
 #include "network/connection.h"
 #include "transaction/transaction_manager.h"
+#include "replication/caspaxos.h"
 #include <memory>
 #include <atomic>
 #include <thread>
@@ -14,7 +15,8 @@ namespace network {
 // TCP Server for handling concurrent connections
 class Server {
 public:
-    Server(int port, std::shared_ptr<transaction::TransactionManager> txn_mgr);
+    Server(int port, std::shared_ptr<transaction::TransactionManager> txn_mgr,
+           std::shared_ptr<replication::CasPaxos> paxos = nullptr);
     ~Server();
     
     void start();
@@ -25,6 +27,7 @@ private:
     int port_;
     int server_fd_;
     std::shared_ptr<transaction::TransactionManager> txn_mgr_;
+    std::shared_ptr<replication::CasPaxos> paxos_;
     std::atomic<bool> running_;
     std::vector<std::thread> worker_threads_;
     
