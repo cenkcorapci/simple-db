@@ -1,0 +1,100 @@
+services:
+  # Leader database instance
+  leader:
+    build:
+      context: .
+      dockerfile: Dockerfile.debian
+    container_name: simpledb-leader
+    hostname: leader
+    ports:
+      - "7777:7777"
+    volumes:
+      - leader-data:/data
+    command: ["--port", "7777", "--log", "/data/simpledb.log", "--role", "leader"]
+    networks:
+      - simpledb-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "7777"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Follower 1
+  follower1:
+    build:
+      context: .
+      dockerfile: Dockerfile.debian
+    container_name: simpledb-follower1
+    hostname: follower1
+    ports:
+      - "7778:7778"
+    volumes:
+      - follower1-data:/data
+    command: ["--port", "7778", "--log", "/data/simpledb.log", "--role", "follower", "--leader", "leader:7777"]
+    networks:
+      - simpledb-network
+    depends_on:
+      leader:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "7778"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Follower 2
+  follower2:
+    build:
+      context: .
+      dockerfile: Dockerfile.debian
+    container_name: simpledb-follower2
+    hostname: follower2
+    ports:
+      - "7779:7779"
+    volumes:
+      - follower2-data:/data
+    command: ["--port", "7779", "--log", "/data/simpledb.log", "--role", "follower", "--leader", "leader:7777"]
+    networks:
+      - simpledb-network
+    depends_on:
+      leader:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "7779"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Test runner container for integration tests
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.debian
+    container_name: simpledb-test-runner
+    volumes:
+      - ./integration-tests.sh:/test/integration-tests.sh:ro
+    networks:
+      - simpledb-network
+    depends_on:
+      leader:
+        condition: service_healthy
+      follower1:
+        condition: service_healthy
+      follower2:
+        condition: service_healthy
+    entrypoint: ["/bin/sh"]
+    command: ["/test/integration-tests.sh"]
+    profiles:
+      - test
+
+networks:
+  simpledb-network:
+    driver: bridge
+
+volumes:
+  leader-data:
+  follower1-data:
+  follower2-data:
