@@ -24,6 +24,7 @@ set(SOURCES
     src/network/server.cpp
     src/network/connection.cpp
     src/replication/replicator.cpp
+    src/replication/caspaxos.cpp
 )
 
 # Create executable
@@ -32,3 +33,10 @@ add_executable(simpledb ${SOURCES})
 # Threading support
 find_package(Threads REQUIRED)
 target_link_libraries(simpledb Threads::Threads)
+
+# Test executable for CasPaxos
+add_executable(test_caspaxos 
+    test_caspaxos.cpp
+    src/replication/caspaxos.cpp
+)
+target_link_libraries(test_caspaxos Threads::Threads)
