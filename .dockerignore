@@ -1,0 +1,25 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+FEATURES.md
+LICENSE
+DOCKER.md
+QUICKSTART.md
+
+# Test files
+test.sh
+
+# Docker files (we don't need these in the image)
+Dockerfile
+docker-compose.yml
+.dockerignore
