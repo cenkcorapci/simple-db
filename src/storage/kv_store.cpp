@@ -1,61 +1,45 @@
 #include "storage/kv_store.h"
 #include <chrono>
 #include <functional>
+#include <iostream>
 
 namespace simpledb {
 namespace storage {
 
-KVStore::KVStore(const std::string& log_filename) : rtree_(4) {
+KVStore::KVStore(const std::string& log_filename, size_t dimension) {
     log_ = std::make_unique<AppendLog>(log_filename);
+    hnsw_ = std::make_unique<HNSW>(dimension);
     recover();
 }
 
-bool KVStore::put(uint64_t txn_id, const std::string& key, const std::string& value) {
+bool KVStore::put_vector(uint64_t txn_id, const std::string& key, const Vector& vector) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     auto timestamp = std::chrono::system_clock::now().time_since_epoch().count();
-    LogRecord record(RecordType::INSERT, txn_id, key, value, timestamp);
+    LogRecord record(RecordType::INSERT, txn_id, key, vector, timestamp);
     
     size_t offset = log_->append(record);
     
     // Update index
     index_[key] = offset;
-    cache_[key] = value;
     
-    // Update R-tree
-    BoundingBox bbox = hash_to_bbox(key);
-    rtree_.insert(key, bbox, offset);
+    // Update HNSW
+    hnsw_->insert(key, vector, offset);
     
     return true;
 }
 
-bool KVStore::get(const std::string& key, std::string& value) {
+bool KVStore::get_vector(const std::string& key, Vector& vector) {
     std::lock_guard<std::mutex> lock(mutex_);
     
-    // Check cache first
-    auto cache_it = cache_.find(key);
-    if (cache_it != cache_.end()) {
-        value = cache_it->second;
-        return true;
-    }
+    size_t offset;
+    return hnsw_->get(key, vector, offset);
+}
+
+std::vector<SearchResult> KVStore::search_vectors(const Vector& query, size_t k) {
+    std::lock_guard<std::mutex> lock(mutex_);
     
-    // Check index
-    auto it = index_.find(key);
-    if (it == index_.end()) {
-        return false;
-    }
-    
-    // Read from log
-    LogRecord record;
-    if (log_->read(it->second, record)) {
-        if (record.type == RecordType::INSERT) {
-            value = record.value;
-            cache_[key] = value;  // Update cache
-            return true;
-        }
-    }
-    
-    return false;
+    return hnsw_->search(query, k);
 }
 
 bool KVStore::remove(uint64_t txn_id, const std::string& key) {
@@ -67,13 +51,13 @@ bool KVStore::remove(uint64_t txn_id, const std::string& key) {
     }
     
     auto timestamp = std::chrono::system_clock::now().time_since_epoch().count();
-    LogRecord record(RecordType::DELETE, txn_id, key, "", timestamp);
+    LogRecord record(RecordType::DELETE, txn_id, key, Vector(), timestamp);
     
     log_->append(record);
     
-    // Remove from index and cache
+    // Remove from index and HNSW
     index_.erase(key);
-    cache_.erase(key);
+    hnsw_->remove(key);
     
     return true;
 }
@@ -85,7 +69,7 @@ bool KVStore::exists(const std::string& key) {
 
 void KVStore::commit(uint64_t txn_id) {
     auto timestamp = std::chrono::system_clock::now().time_since_epoch().count();
-    LogRecord record(RecordType::COMMIT, txn_id, "", "", timestamp);
+    LogRecord record(RecordType::COMMIT, txn_id, "", Vector(), timestamp);
     log_->append(record);
     log_->sync();
 }
@@ -99,33 +83,17 @@ void KVStore::replay_log() {
     
     size_t offset = 0;
     for (const auto& record : records) {
-        if (record.type == RecordType::INSERT) {
+        if (record.type == RecordType::INSERT && record.is_vector) {
             // Reconstruct index with approximate offsets
             index_[record.key] = offset;
-            cache_[record.key] = record.value;
-            
-            BoundingBox bbox = hash_to_bbox(record.key);
-            rtree_.insert(record.key, bbox, offset);
+            hnsw_->insert(record.key, record.vector_data, offset);
         } else if (record.type == RecordType::DELETE) {
             index_.erase(record.key);
-            cache_.erase(record.key);
+            hnsw_->remove(record.key);
         }
         // Approximate offset increment based on record size
         offset += 100;  // Rough estimate
     }
-}
-
-BoundingBox KVStore::hash_to_bbox(const std::string& key) {
-    // Simple hash function to convert key to 2D bounding box
-    std::hash<std::string> hasher;
-    size_t hash = hasher(key);
-    
-    double x = static_cast<double>(hash & 0xFFFFFFFF) / 0x100000000ULL;
-    double y = static_cast<double>((hash >> 32) & 0xFFFFFFFF) / 0x100000000ULL;
-    
-    // Small bounding box centered at (x, y)
-    double delta = 0.001;
-    return BoundingBox(x - delta, y - delta, x + delta, y + delta);
 }
 
 } // namespace storage

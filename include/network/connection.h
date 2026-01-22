@@ -28,11 +28,16 @@ private:
     
     // Command handlers
     void handle_get(const std::string& key);
-    void handle_set(const std::string& key, const std::string& value);
+    void handle_insert(const std::string& key, const std::string& vector_str);
+    void handle_search(const std::string& vector_str, size_t k);
     void handle_delete(const std::string& key);
     void handle_begin();
     void handle_commit();
     void handle_rollback();
+    
+    // Helper functions
+    storage::Vector parse_vector(const std::string& vec_str);
+    std::string vector_to_string(const storage::Vector& vec);
 };
 
 } // namespace network
