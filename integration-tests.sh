@@ -63,8 +63,18 @@ db_command() {
     local port=$2
     local command=$3
     
-    # Send command and skip the welcome message (first line)
-    echo "$command" | nc -w 2 "$host" "$port" 2>/dev/null | tail -n +2 | head -1
+    # Send command and handle the welcome message
+    # The server sends "SimpleDB v1.0 - Ready" as first line
+    # We skip it and get the actual response
+    local output=$(echo "$command" | nc -w 2 "$host" "$port" 2>/dev/null)
+    
+    # Check if we got any output
+    if [ -z "$output" ]; then
+        return 1
+    fi
+    
+    # Skip the welcome message (first line) and get the response
+    echo "$output" | tail -n +2 | head -1
 }
 
 # Test if a key exists on a node

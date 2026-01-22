@@ -13,10 +13,11 @@ build/
 README.md
 FEATURES.md
 LICENSE
+DOCKER.md
+QUICKSTART.md
 
 # Test files
 test.sh
-integration-tests.sh
 
 # Docker files (we don't need these in the image)
 Dockerfile
