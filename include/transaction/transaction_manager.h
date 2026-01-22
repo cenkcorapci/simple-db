@@ -21,7 +21,7 @@ enum class TxnState {
 struct Transaction {
     uint64_t txn_id;
     TxnState state;
-    std::vector<std::pair<std::string, std::string>> write_set;
+    std::vector<std::pair<std::string, storage::Vector>> write_set;
     
     Transaction(uint64_t id) : txn_id(id), state(TxnState::ACTIVE) {}
 };
@@ -36,9 +36,12 @@ public:
     bool commit_transaction(uint64_t txn_id);
     bool rollback_transaction(uint64_t txn_id);
     
-    bool read(uint64_t txn_id, const std::string& key, std::string& value);
-    bool write(uint64_t txn_id, const std::string& key, const std::string& value);
+    bool read(uint64_t txn_id, const std::string& key, storage::Vector& vector);
+    bool write(uint64_t txn_id, const std::string& key, const storage::Vector& vector);
     bool remove(uint64_t txn_id, const std::string& key);
+    
+    // Search operation (read-only, doesn't need transaction)
+    std::vector<storage::SearchResult> search(const storage::Vector& query, size_t k);
     
 private:
     std::shared_ptr<storage::KVStore> store_;

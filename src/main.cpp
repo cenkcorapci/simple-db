@@ -57,12 +57,12 @@ int main(int argc, char* argv[]) {
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     
-    std::cout << "SimpleDB - A simple key-value database" << std::endl;
+    std::cout << "SimpleDB - A Vector Database with HNSW" << std::endl;
     std::cout << "=======================================" << std::endl;
     std::cout << "Features:" << std::endl;
+    std::cout << "  - Vector similarity search with HNSW" << std::endl;
     std::cout << "  - Concurrent connections" << std::endl;
     std::cout << "  - ACID compliance" << std::endl;
-    std::cout << "  - R-tree indexing" << std::endl;
     std::cout << "  - Append-only log" << std::endl;
     std::cout << "  - Leader-follower replication" << std::endl;
     std::cout << "  - No external dependencies" << std::endl;

@@ -22,13 +22,18 @@ struct LogRecord {
     RecordType type;
     uint64_t transaction_id;
     std::string key;
-    std::string value;
+    std::string value;  // For backward compatibility with string values
+    std::vector<float> vector_data;  // For vector data
     uint64_t timestamp;
+    bool is_vector;  // Flag to distinguish vector vs string data
     
-    LogRecord() : type(RecordType::INSERT), transaction_id(0), timestamp(0) {}
+    LogRecord() : type(RecordType::INSERT), transaction_id(0), timestamp(0), is_vector(false) {}
     LogRecord(RecordType t, uint64_t tid, const std::string& k, 
               const std::string& v, uint64_t ts)
-        : type(t), transaction_id(tid), key(k), value(v), timestamp(ts) {}
+        : type(t), transaction_id(tid), key(k), value(v), timestamp(ts), is_vector(false) {}
+    LogRecord(RecordType t, uint64_t tid, const std::string& k,
+              const std::vector<float>& vec, uint64_t ts)
+        : type(t), transaction_id(tid), key(k), vector_data(vec), timestamp(ts), is_vector(true) {}
 };
 
 // Append-only log for durability
