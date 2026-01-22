@@ -190,7 +190,9 @@ public:
     
     // Get quorum size (majority)
     size_t get_quorum_size() const {
-        return (replicas_.size() / 2) + 1;
+        // Total nodes = replicas + self (local node)
+        size_t total_nodes = replicas_.size() + 1;
+        return (total_nodes / 2) + 1;
     }
     
 private:

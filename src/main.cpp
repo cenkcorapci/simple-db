@@ -2,6 +2,7 @@
 #include "transaction/transaction_manager.h"
 #include "storage/kv_store.h"
 #include "replication/replicator.h"
+#include "replication/caspaxos.h"
 #include <iostream>
 #include <memory>
 #include <signal.h>
@@ -28,6 +29,8 @@ void print_usage(const char* program_name) {
     std::cout << "  --log <file>           Log file path (default: simpledb.log)" << std::endl;
     std::cout << "  --role <leader|follower>  Replication role (default: leader)" << std::endl;
     std::cout << "  --leader <host:port>   Leader address (for follower role)" << std::endl;
+    std::cout << "  --consensus            Enable CasPaxos consensus protocol" << std::endl;
+    std::cout << "  --node-id <id>         Node ID for CasPaxos (default: 1)" << std::endl;
     std::cout << "  --help                 Show this help message" << std::endl;
 }
 
@@ -37,6 +40,8 @@ int main(int argc, char* argv[]) {
     std::string log_file = "simpledb.log";
     std::string role_str = "leader";
     std::string leader_addr = "";
+    bool enable_consensus = false;
+    uint32_t node_id = 1;
     
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "--port") == 0 && i + 1 < argc) {
@@ -47,6 +52,10 @@ int main(int argc, char* argv[]) {
             role_str = argv[++i];
         } else if (std::strcmp(argv[i], "--leader") == 0 && i + 1 < argc) {
             leader_addr = argv[++i];
+        } else if (std::strcmp(argv[i], "--consensus") == 0) {
+            enable_consensus = true;
+        } else if (std::strcmp(argv[i], "--node-id") == 0 && i + 1 < argc) {
+            node_id = std::atoi(argv[++i]);
         } else if (std::strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
             return 0;
@@ -65,6 +74,9 @@ int main(int argc, char* argv[]) {
     std::cout << "  - R-tree indexing" << std::endl;
     std::cout << "  - Append-only log" << std::endl;
     std::cout << "  - Leader-follower replication" << std::endl;
+    if (enable_consensus) {
+        std::cout << "  - CasPaxos consensus protocol" << std::endl;
+    }
     std::cout << "  - No external dependencies" << std::endl;
     std::cout << "=======================================" << std::endl << std::endl;
     
@@ -98,8 +110,16 @@ int main(int argc, char* argv[]) {
     replicator->start();
     std::cout << "Replication started (role: " << role_str << ")" << std::endl;
     
+    // Create CasPaxos if enabled
+    std::shared_ptr<replication::CasPaxos> paxos;
+    if (enable_consensus) {
+        std::vector<std::string> replicas;  // TODO: Add replica addresses from config
+        paxos = std::make_shared<replication::CasPaxos>(node_id, replicas);
+        std::cout << "CasPaxos consensus enabled (node ID: " << node_id << ")" << std::endl;
+    }
+    
     // Create and start server
-    g_server = std::make_unique<network::Server>(port, txn_mgr);
+    g_server = std::make_unique<network::Server>(port, txn_mgr, paxos);
     std::cout << "Starting server on port " << port << "..." << std::endl;
     
     g_server->start();
