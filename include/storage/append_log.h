@@ -52,12 +52,12 @@ public:
     
 private:
     std::string filename_;
-    std::fstream file_;
+    std::ofstream write_file_;
     mutable std::mutex mutex_;
     size_t current_offset_;
     
     void write_record(const LogRecord& record);
-    bool read_record(LogRecord& record);
+    bool read_record(std::ifstream& file, LogRecord& record);
     size_t serialize_record(const LogRecord& record, std::vector<char>& buffer);
 };
 

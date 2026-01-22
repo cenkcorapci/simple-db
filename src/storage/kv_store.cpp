@@ -1,6 +1,7 @@
 #include "storage/kv_store.h"
 #include <chrono>
 #include <functional>
+#include <iostream>
 
 namespace simpledb {
 namespace storage {

@@ -26,6 +26,7 @@ void print_usage(const char* program_name) {
     std::cout << "Options:" << std::endl;
     std::cout << "  --port <port>          Server port (default: 7777)" << std::endl;
     std::cout << "  --log <file>           Log file path (default: simpledb.log)" << std::endl;
+    std::cout << "  --dim <dimension>      Vector dimension (default: 128)" << std::endl;
     std::cout << "  --role <leader|follower>  Replication role (default: leader)" << std::endl;
     std::cout << "  --leader <host:port>   Leader address (for follower role)" << std::endl;
     std::cout << "  --help                 Show this help message" << std::endl;
@@ -35,6 +36,7 @@ int main(int argc, char* argv[]) {
     // Parse command line arguments
     int port = 7777;
     std::string log_file = "simpledb.log";
+    size_t dimension = 128;
     std::string role_str = "leader";
     std::string leader_addr = "";
     
@@ -43,6 +45,8 @@ int main(int argc, char* argv[]) {
             port = std::atoi(argv[++i]);
         } else if (std::strcmp(argv[i], "--log") == 0 && i + 1 < argc) {
             log_file = argv[++i];
+        } else if (std::strcmp(argv[i], "--dim") == 0 && i + 1 < argc) {
+            dimension = std::atoi(argv[++i]);
         } else if (std::strcmp(argv[i], "--role") == 0 && i + 1 < argc) {
             role_str = argv[++i];
         } else if (std::strcmp(argv[i], "--leader") == 0 && i + 1 < argc) {
@@ -69,8 +73,8 @@ int main(int argc, char* argv[]) {
     std::cout << "=======================================" << std::endl << std::endl;
     
     // Create storage layer
-    auto store = std::make_shared<storage::KVStore>(log_file);
-    std::cout << "Storage initialized (log: " << log_file << ")" << std::endl;
+    auto store = std::make_shared<storage::KVStore>(log_file, dimension);
+    std::cout << "Storage initialized (log: " << log_file << ", dimension: " << dimension << ")" << std::endl;
     
     // Create transaction manager
     auto txn_mgr = std::make_shared<transaction::TransactionManager>(store);
