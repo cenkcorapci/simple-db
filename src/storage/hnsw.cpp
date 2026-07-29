@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <limits>
 #include <random>
+#include <ranges>
 
 namespace simpledb {
 namespace storage {
@@ -54,7 +55,7 @@ void HNSW::insert(const std::string& key, const Vector& vector, size_t offset) {
     }
     
     // Check if key already exists
-    if (nodes_.find(key) != nodes_.end()) {
+    if (nodes_.contains(key)) {
         return;  // Key already exists
     }
     
@@ -166,10 +167,10 @@ std::vector<std::string> HNSW::search_layer(const Vector& query,
         auto node = nodes_[current.second];
         if (level < static_cast<int>(node->neighbors.size())) {
             for (const auto& neighbor_key : node->neighbors[level]) {
-                if (visited.find(neighbor_key) == visited.end()) {
+                if (!visited.contains(neighbor_key)) {
                     visited.insert(neighbor_key);
                     
-                    if (deleted_keys_.find(neighbor_key) != deleted_keys_.end()) {
+                    if (deleted_keys_.contains(neighbor_key)) {
                         continue;  // Skip deleted nodes
                     }
                     
@@ -196,7 +197,7 @@ std::vector<std::string> HNSW::search_layer(const Vector& query,
         result_keys.push_back(results.top().second);
         results.pop();
     }
-    std::reverse(result_keys.begin(), result_keys.end());
+    std::ranges::reverse(result_keys);
     
     return result_keys;
 }
@@ -212,17 +213,18 @@ std::vector<std::string> HNSW::select_neighbors_heuristic(
     // Simple heuristic: select M nearest neighbors
     std::vector<std::pair<float, std::string>> distances;
     for (const auto& candidate : candidates) {
-        if (deleted_keys_.find(candidate) == deleted_keys_.end()) {
+        if (!deleted_keys_.contains(candidate)) {
             float d = compute_distance(query, nodes_[candidate]->vector);
             distances.push_back({d, candidate});
         }
     }
     
-    std::sort(distances.begin(), distances.end());
+    std::ranges::sort(distances);
     
     std::vector<std::string> selected;
-    for (size_t i = 0; i < std::min(M, distances.size()); ++i) {
-        selected.push_back(distances[i].second);
+    // C++20 views::take limits iteration to M elements without slicing the vector
+    for (const auto& [dist, key] : distances | std::views::take(M)) {
+        selected.push_back(key);
     }
     
     return selected;
@@ -242,19 +244,18 @@ std::vector<SearchResult> HNSW::search(const Vector& query, size_t k, size_t ef_
     
     // Search from top level down to level 0
     for (int lc = entry_level; lc > 0; --lc) {
-        auto candidates = search_layer(query, curr_nearest, 1, lc);
-        if (!candidates.empty()) {
-            curr_nearest = candidates[0];
+        auto layer_candidates = search_layer(query, curr_nearest, 1, lc);
+        if (!layer_candidates.empty()) {
+            curr_nearest = layer_candidates[0];
         }
     }
     
     // Search at layer 0 with ef_search
     auto candidates = search_layer(query, curr_nearest, std::max(ef_search, k), 0);
     
-    // Return top k results
-    for (size_t i = 0; i < std::min(k, candidates.size()); ++i) {
-        const auto& key = candidates[i];
-        if (deleted_keys_.find(key) == deleted_keys_.end()) {
+    // Return top k results, skipping deleted keys
+    for (const auto& key : candidates | std::views::take(k)) {
+        if (!deleted_keys_.contains(key)) {
             float dist = compute_distance(query, nodes_[key]->vector);
             results.emplace_back(key, dist);
         }
@@ -267,7 +268,7 @@ bool HNSW::get(const std::string& key, Vector& vector, size_t& offset) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     auto it = nodes_.find(key);
-    if (it == nodes_.end() || deleted_keys_.find(key) != deleted_keys_.end()) {
+    if (it == nodes_.end() || deleted_keys_.contains(key)) {
         return false;
     }
     
@@ -279,8 +280,7 @@ bool HNSW::get(const std::string& key, Vector& vector, size_t& offset) {
 bool HNSW::remove(const std::string& key) {
     std::lock_guard<std::mutex> lock(mutex_);
     
-    auto it = nodes_.find(key);
-    if (it == nodes_.end()) {
+    if (!nodes_.contains(key)) {
         return false;
     }
     

@@ -61,7 +61,7 @@ void test_acceptor_commit() {
     // Prepare first
     Ballot b1(1, 1);
     PrepareMessage prepare(b1, "key1", std::nullopt, "value1");
-    acceptor.handle_prepare(prepare);
+    [[maybe_unused]] auto ignored_promise = acceptor.handle_prepare(prepare);
     
     // Commit the value
     CommitMessage commit(b1, "key1", "value1");
@@ -85,9 +85,9 @@ void test_cas_condition() {
     // First, commit a value
     Ballot b1(1, 1);
     PrepareMessage prepare1(b1, "key1", std::nullopt, "initial");
-    acceptor.handle_prepare(prepare1);
+    [[maybe_unused]] auto ignored1 = acceptor.handle_prepare(prepare1);
     CommitMessage commit1(b1, "key1", "initial");
-    acceptor.handle_commit(commit1);
+    [[maybe_unused]] auto ignored2 = acceptor.handle_commit(commit1);
     
     // Test CAS with correct old value
     Ballot b2(2, 1);
@@ -177,7 +177,7 @@ void test_caspaxos_delete() {
     CasPaxos paxos(1, replicas);
     
     // Set a value
-    paxos.set("delete_key", "delete_value");
+    [[maybe_unused]] bool set_ok = paxos.set("delete_key", "delete_value");
     
     // Delete with correct old value
     // Note: In this implementation, delete sets the value to empty string

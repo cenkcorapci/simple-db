@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 #include <thread>
-#include <atomic>
 #include <mutex>
 
 namespace simpledb {
@@ -33,13 +32,13 @@ public:
     void start();
     void stop();
     
-    ReplicatorRole role() const { return role_; }
+    [[nodiscard]] ReplicatorRole role() const { return role_; }
     
 private:
     std::string log_file_;
     ReplicatorRole role_;
-    std::atomic<bool> running_;
-    std::thread replication_thread_;
+    // C++20: jthread automatically requests stop and joins on destruction
+    std::jthread replication_thread_;
     std::mutex mutex_;
     
     // Leader state
@@ -57,10 +56,11 @@ private:
     int leader_socket_;
     size_t last_applied_offset_;
     
-    void replication_loop();
+    // C++20: stop_token carries the cooperative cancellation signal
+    void replication_loop(std::stop_token stoken);
     void send_to_followers();
     void receive_from_leader();
-    int connect_to_host(const std::string& host, int port);
+    [[nodiscard]] int connect_to_host(const std::string& host, int port);
 };
 
 } // namespace replication

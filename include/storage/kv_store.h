@@ -18,18 +18,18 @@ public:
     ~KVStore() = default;
     
     // Vector operations
-    bool put_vector(uint64_t txn_id, const std::string& key, const Vector& vector);
-    bool get_vector(const std::string& key, Vector& vector);
-    std::vector<SearchResult> search_vectors(const Vector& query, size_t k);
+    [[nodiscard]] bool put_vector(uint64_t txn_id, const std::string& key, const Vector& vector);
+    [[nodiscard]] bool get_vector(const std::string& key, Vector& vector);
+    [[nodiscard]] std::vector<SearchResult> search_vectors(const Vector& query, size_t k);
     
-    bool remove(uint64_t txn_id, const std::string& key);
-    bool exists(const std::string& key);
+    [[nodiscard]] bool remove(uint64_t txn_id, const std::string& key);
+    [[nodiscard]] bool exists(const std::string& key);
     
     void commit(uint64_t txn_id);
     void recover();  // Recover from log on startup
     
-    size_t size() const { return hnsw_->size(); }
-    size_t dimension() const { return hnsw_->dimension(); }
+    [[nodiscard]] size_t size() const { return hnsw_->size(); }
+    [[nodiscard]] size_t dimension() const { return hnsw_->dimension(); }
     
 private:
     std::unique_ptr<AppendLog> log_;

@@ -42,13 +42,13 @@ public:
     AppendLog(const std::string& filename);
     ~AppendLog();
     
-    size_t append(const LogRecord& record);
-    bool read(size_t offset, LogRecord& record);
-    std::vector<LogRecord> read_all();
+    [[nodiscard]] size_t append(const LogRecord& record);
+    [[nodiscard]] bool read(size_t offset, LogRecord& record);
+    [[nodiscard]] std::vector<LogRecord> read_all();
     void sync();  // Force sync to disk
     void checkpoint();
     
-    size_t size() const { return current_offset_; }
+    [[nodiscard]] size_t size() const { return current_offset_; }
     
 private:
     std::string filename_;
