@@ -47,12 +47,7 @@ void Server::stop() {
         server_fd_ = -1;
     }
     
-    // Wait for all worker threads to finish
-    for (auto& thread : worker_threads_) {
-        if (thread.joinable()) {
-            thread.join();
-        }
-    }
+    // C++20: clearing jthreads auto-joins each one in turn
     worker_threads_.clear();
 }
 

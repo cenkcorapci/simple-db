@@ -29,7 +29,8 @@ private:
     std::shared_ptr<transaction::TransactionManager> txn_mgr_;
     std::shared_ptr<replication::CasPaxos> paxos_;
     std::atomic<bool> running_;
-    std::vector<std::thread> worker_threads_;
+    // C++20: jthreads auto-join on destruction, eliminating manual join loops
+    std::vector<std::jthread> worker_threads_;
     
     void accept_connections();
     void handle_connection(int client_fd);

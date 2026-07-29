@@ -22,8 +22,8 @@ public:
     LockManager() = default;
     ~LockManager() = default;
     
-    bool acquire_lock(uint64_t txn_id, const std::string& key, LockMode mode);
-    bool release_lock(uint64_t txn_id, const std::string& key);
+    [[nodiscard]] bool acquire_lock(uint64_t txn_id, const std::string& key, LockMode mode);
+    [[nodiscard]] bool release_lock(uint64_t txn_id, const std::string& key);
     void release_all_locks(uint64_t txn_id);
     
 private:
