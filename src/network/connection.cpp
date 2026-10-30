@@ -1,8 +1,8 @@
 #include "network/connection.h"
 #include <unistd.h>
 #include <sstream>
+#include <format>
 #include <iostream>
-#include <iomanip>
 
 namespace simpledb {
 namespace network {
@@ -15,7 +15,7 @@ Connection::Connection(int socket_fd, std::shared_ptr<transaction::TransactionMa
 
 Connection::~Connection() {
     if (in_transaction_) {
-        txn_mgr_->rollback_transaction(current_txn_id_);
+        [[maybe_unused]] bool ok = txn_mgr_->rollback_transaction(current_txn_id_);
     }
     close(socket_fd_);
 }
@@ -90,20 +90,23 @@ storage::Vector Connection::parse_vector(const std::string& vec_str) {
 }
 
 std::string Connection::vector_to_string(const storage::Vector& vec) {
-    std::ostringstream oss;
-    oss << "[";
+    std::string result = "[";
     for (size_t i = 0; i < vec.size(); ++i) {
-        if (i > 0) oss << ",";
-        oss << std::fixed << std::setprecision(6) << vec[i];
+        if (i > 0) result += ',';
+        // C++20: std::format replaces std::ostringstream + std::fixed + std::setprecision
+        result += std::format("{:.6f}", vec[i]);
     }
-    oss << "]";
-    return oss.str();
+    result += ']';
+    return result;
 }
 
 void Connection::process_command(const std::string& command) {
     std::istringstream iss(command);
-    std::string cmd;
-    iss >> cmd;
+    std::string cmd_str;
+    iss >> cmd_str;
+    
+    // C++17 string_view for zero-copy comparison against string literals
+    std::string_view cmd = cmd_str;
     
     if (cmd == "GET") {
         std::string key;
@@ -187,12 +190,9 @@ void Connection::handle_get(const std::string& key) {
     } else {
         // Auto-commit transaction for single operation
         uint64_t txn_id = txn_mgr_->begin_transaction();
-        if (txn_mgr_->read(txn_id, key, vector)) {
-            write_line("OK " + vector_to_string(vector));
-        } else {
-            write_line("NOT_FOUND");
-        }
-        txn_mgr_->commit_transaction(txn_id);
+        txn_mgr_->read(txn_id, key, vector) ? write_line("OK " + vector_to_string(vector))
+                                             : write_line("NOT_FOUND");
+        [[maybe_unused]] bool committed = txn_mgr_->commit_transaction(txn_id);
     }
 }
 
@@ -214,10 +214,10 @@ void Connection::handle_insert(const std::string& key, const std::string& vector
         // Auto-commit transaction for single operation
         uint64_t txn_id = txn_mgr_->begin_transaction();
         if (txn_mgr_->write(txn_id, key, vector)) {
-            txn_mgr_->commit_transaction(txn_id);
+            [[maybe_unused]] bool committed = txn_mgr_->commit_transaction(txn_id);
             write_line("OK");
         } else {
-            txn_mgr_->rollback_transaction(txn_id);
+            [[maybe_unused]] bool rolled_back = txn_mgr_->rollback_transaction(txn_id);
             write_line("ERROR: Insert failed");
         }
     }
@@ -236,12 +236,11 @@ void Connection::handle_search(const std::string& vector_str, size_t k) {
     if (results.empty()) {
         write_line("OK 0 results");
     } else {
-        std::ostringstream oss;
-        oss << "OK " << results.size() << " results";
+        std::string response = std::format("OK {} results", results.size());
         for (const auto& result : results) {
-            oss << "\r\n" << result.key << " distance=" << std::fixed << std::setprecision(6) << result.distance;
+            response += std::format("\r\n{} distance={:.6f}", result.key, result.distance);
         }
-        write_line(oss.str());
+        write_line(response);
     }
 }
 
@@ -256,10 +255,10 @@ void Connection::handle_delete(const std::string& key) {
         // Auto-commit transaction for single operation
         uint64_t txn_id = txn_mgr_->begin_transaction();
         if (txn_mgr_->remove(txn_id, key)) {
-            txn_mgr_->commit_transaction(txn_id);
+            [[maybe_unused]] bool committed = txn_mgr_->commit_transaction(txn_id);
             write_line("OK");
         } else {
-            txn_mgr_->rollback_transaction(txn_id);
+            [[maybe_unused]] bool rolled_back = txn_mgr_->rollback_transaction(txn_id);
             write_line("ERROR: Delete failed");
         }
     }

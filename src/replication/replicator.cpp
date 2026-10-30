@@ -10,7 +10,7 @@ namespace simpledb {
 namespace replication {
 
 Replicator::Replicator(const std::string& log_file, ReplicatorRole role)
-    : log_file_(log_file), role_(role), running_(false), 
+    : log_file_(log_file), role_(role),
       leader_port_(0), leader_socket_(-1), last_applied_offset_(0) {
 }
 
@@ -64,26 +64,26 @@ void Replicator::sync_from_leader() {
 }
 
 void Replicator::start() {
-    if (running_) {
+    if (replication_thread_.joinable()) {
         return;
     }
     
-    running_ = true;
-    replication_thread_ = std::thread(&Replicator::replication_loop, this);
+    // C++20: jthread receives stop_token automatically from its internal stop_source
+    replication_thread_ = std::jthread([this](std::stop_token stoken) {
+        replication_loop(stoken);
+    });
 }
 
 void Replicator::stop() {
-    if (!running_) {
+    if (!replication_thread_.joinable()) {
         return;
     }
     
-    running_ = false;
+    // Signal cooperative cancellation, then wait for the thread to finish
+    replication_thread_.request_stop();
+    replication_thread_.join();
     
-    if (replication_thread_.joinable()) {
-        replication_thread_.join();
-    }
-    
-    // Close connections
+    // Close connections after thread has exited
     if (leader_socket_ >= 0) {
         close(leader_socket_);
         leader_socket_ = -1;
@@ -96,8 +96,8 @@ void Replicator::stop() {
     }
 }
 
-void Replicator::replication_loop() {
-    while (running_) {
+void Replicator::replication_loop(std::stop_token stoken) {
+    while (!stoken.stop_requested()) {
         if (role_ == ReplicatorRole::LEADER) {
             send_to_followers();
         } else {

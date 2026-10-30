@@ -35,12 +35,9 @@ bool LockManager::acquire_lock(uint64_t txn_id, const std::string& key, LockMode
         return false;
     });
     
-    // Remove from request queue
-    queue.requests.erase(
-        std::remove_if(queue.requests.begin(), queue.requests.end(),
-                      [txn_id](const LockRequest& req) { return req.txn_id == txn_id; }),
-        queue.requests.end()
-    );
+    // C++20: std::erase_if replaces the erase-remove idiom
+    std::erase_if(queue.requests,
+                  [txn_id](const LockRequest& req) { return req.txn_id == txn_id; });
     
     txn_locks_[txn_id].insert(key);
     return true;

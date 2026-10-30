@@ -19,30 +19,8 @@ struct Ballot {
     Ballot() : epoch(0), node_id(0) {}
     Ballot(uint64_t e, uint32_t n) : epoch(e), node_id(n) {}
     
-    bool operator<(const Ballot& other) const {
-        if (epoch != other.epoch) return epoch < other.epoch;
-        return node_id < other.node_id;
-    }
-    
-    bool operator>(const Ballot& other) const {
-        return other < *this;
-    }
-    
-    bool operator==(const Ballot& other) const {
-        return epoch == other.epoch && node_id == other.node_id;
-    }
-    
-    bool operator!=(const Ballot& other) const {
-        return !(*this == other);
-    }
-    
-    bool operator<=(const Ballot& other) const {
-        return *this < other || *this == other;
-    }
-    
-    bool operator>=(const Ballot& other) const {
-        return *this > other || *this == other;
-    }
+    // C++20: single defaulted spaceship generates <, <=, >, >=, ==, !=
+    auto operator<=>(const Ballot&) const = default;
 };
 
 // Versioned value entry
@@ -133,16 +111,16 @@ public:
     AcceptorState(uint32_t node_id);
     
     // Process PREPARE message
-    std::optional<PromiseMessage> handle_prepare(const PrepareMessage& msg);
+    [[nodiscard]] std::optional<PromiseMessage> handle_prepare(const PrepareMessage& msg);
     
     // Process COMMIT message
-    AckMessage handle_commit(const CommitMessage& msg);
+    [[nodiscard]] AckMessage handle_commit(const CommitMessage& msg);
     
     // Get value for key
-    std::optional<VersionedValue> get_value(const std::string& key) const;
+    [[nodiscard]] std::optional<VersionedValue> get_value(const std::string& key) const;
     
     // Get current ballot
-    Ballot get_highest_ballot() const { return highest_ballot_; }
+    [[nodiscard]] Ballot get_highest_ballot() const { return highest_ballot_; }
     
 private:
     uint32_t node_id_;
@@ -157,7 +135,7 @@ public:
     ProposerState(uint32_t node_id);
     
     // Get next ballot for proposal
-    Ballot get_next_ballot();
+    [[nodiscard]] Ballot get_next_ballot();
     
     // Update ballot based on received higher ballot
     void update_ballot(const Ballot& ballot);
@@ -175,21 +153,21 @@ public:
     ~CasPaxos();
     
     // Perform compare-and-swap operation
-    bool cas(const std::string& key,
+    [[nodiscard]] bool cas(const std::string& key,
              const std::optional<std::string>& old_value,
              const std::string& new_value);
     
     // Get value for key
-    std::optional<std::string> get(const std::string& key);
+    [[nodiscard]] std::optional<std::string> get(const std::string& key);
     
     // Set value for key (unconditional write)
-    bool set(const std::string& key, const std::string& value);
+    [[nodiscard]] bool set(const std::string& key, const std::string& value);
     
     // Delete key (CAS with empty new value)
-    bool del(const std::string& key, const std::optional<std::string>& old_value);
+    [[nodiscard]] bool del(const std::string& key, const std::optional<std::string>& old_value);
     
     // Get quorum size (majority)
-    size_t get_quorum_size() const {
+    [[nodiscard]] size_t get_quorum_size() const {
         // Total nodes = replicas + self (local node)
         size_t total_nodes = replicas_.size() + 1;
         return (total_nodes / 2) + 1;

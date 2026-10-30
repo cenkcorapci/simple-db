@@ -26,7 +26,7 @@ bool TransactionManager::commit_transaction(uint64_t txn_id) {
     
     // Apply all writes in the write set
     for (const auto& write : txn->write_set) {
-        store_->put_vector(txn_id, write.first, write.second);
+        [[maybe_unused]] bool ok = store_->put_vector(txn_id, write.first, write.second);
     }
     
     // Commit to log

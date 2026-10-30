@@ -45,32 +45,31 @@ std::vector<SearchResult> KVStore::search_vectors(const Vector& query, size_t k)
 bool KVStore::remove(uint64_t txn_id, const std::string& key) {
     std::lock_guard<std::mutex> lock(mutex_);
     
-    auto it = index_.find(key);
-    if (it == index_.end()) {
+    if (!index_.contains(key)) {
         return false;
     }
     
     auto timestamp = std::chrono::system_clock::now().time_since_epoch().count();
     LogRecord record(RecordType::DELETE, txn_id, key, Vector(), timestamp);
     
-    log_->append(record);
+    [[maybe_unused]] size_t offset = log_->append(record);
     
     // Remove from index and HNSW
     index_.erase(key);
-    hnsw_->remove(key);
+    [[maybe_unused]] bool removed = hnsw_->remove(key);
     
     return true;
 }
 
 bool KVStore::exists(const std::string& key) {
     std::lock_guard<std::mutex> lock(mutex_);
-    return index_.find(key) != index_.end();
+    return index_.contains(key);
 }
 
 void KVStore::commit(uint64_t txn_id) {
     auto timestamp = std::chrono::system_clock::now().time_since_epoch().count();
     LogRecord record(RecordType::COMMIT, txn_id, "", Vector(), timestamp);
-    log_->append(record);
+    [[maybe_unused]] size_t offset = log_->append(record);
     log_->sync();
 }
 
@@ -89,7 +88,7 @@ void KVStore::replay_log() {
             hnsw_->insert(record.key, record.vector_data, offset);
         } else if (record.type == RecordType::DELETE) {
             index_.erase(record.key);
-            hnsw_->remove(record.key);
+            [[maybe_unused]] bool removed = hnsw_->remove(record.key);
         }
         // Approximate offset increment based on record size
         offset += 100;  // Rough estimate

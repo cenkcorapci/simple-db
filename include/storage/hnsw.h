@@ -46,8 +46,12 @@ struct SearchResult {
     
     SearchResult(const std::string& k, float d) : key(k), distance(d) {}
     
-    bool operator<(const SearchResult& other) const {
-        return distance < other.distance;
+    // C++20: spaceship generates all relational operators from distance ordering
+    auto operator<=>(const SearchResult& other) const {
+        return distance <=> other.distance;
+    }
+    bool operator==(const SearchResult& other) const {
+        return key == other.key && distance == other.distance;
     }
 };
 
@@ -62,19 +66,19 @@ public:
     void insert(const std::string& key, const Vector& vector, size_t offset);
     
     // Search for k-nearest neighbors
-    std::vector<SearchResult> search(const Vector& query, size_t k, size_t ef_search = 50);
+    [[nodiscard]] std::vector<SearchResult> search(const Vector& query, size_t k, size_t ef_search = 50);
     
     // Get vector by key
-    bool get(const std::string& key, Vector& vector, size_t& offset);
+    [[nodiscard]] bool get(const std::string& key, Vector& vector, size_t& offset);
     
     // Remove a vector (marks as deleted)
-    bool remove(const std::string& key);
+    [[nodiscard]] bool remove(const std::string& key);
     
     // Get number of vectors
-    size_t size() const { return nodes_.size() - deleted_keys_.size(); }
+    [[nodiscard]] size_t size() const { return nodes_.size() - deleted_keys_.size(); }
     
     // Get dimension
-    size_t dimension() const { return dimension_; }
+    [[nodiscard]] size_t dimension() const { return dimension_; }
     
 private:
     size_t dimension_;           // Vector dimension

@@ -5,8 +5,8 @@
 #include "replication/caspaxos.h"
 #include <iostream>
 #include <memory>
+#include <string_view>
 #include <signal.h>
-#include <cstring>
 
 using namespace simpledb;
 
@@ -46,21 +46,23 @@ int main(int argc, char* argv[]) {
     uint32_t node_id = 1;
     
     for (int i = 1; i < argc; i++) {
-        if (std::strcmp(argv[i], "--port") == 0 && i + 1 < argc) {
+        // C++17 string_view avoids NUL-terminated strcmp and heap allocation
+        std::string_view arg = argv[i];
+        if (arg == "--port" && i + 1 < argc) {
             port = std::atoi(argv[++i]);
-        } else if (std::strcmp(argv[i], "--log") == 0 && i + 1 < argc) {
+        } else if (arg == "--log" && i + 1 < argc) {
             log_file = argv[++i];
-        } else if (std::strcmp(argv[i], "--dim") == 0 && i + 1 < argc) {
+        } else if (arg == "--dim" && i + 1 < argc) {
             dimension = std::atoi(argv[++i]);
-        } else if (std::strcmp(argv[i], "--role") == 0 && i + 1 < argc) {
+        } else if (arg == "--role" && i + 1 < argc) {
             role_str = argv[++i];
-        } else if (std::strcmp(argv[i], "--leader") == 0 && i + 1 < argc) {
+        } else if (arg == "--leader" && i + 1 < argc) {
             leader_addr = argv[++i];
-        } else if (std::strcmp(argv[i], "--consensus") == 0) {
+        } else if (arg == "--consensus") {
             enable_consensus = true;
-        } else if (std::strcmp(argv[i], "--node-id") == 0 && i + 1 < argc) {
+        } else if (arg == "--node-id" && i + 1 < argc) {
             node_id = std::atoi(argv[++i]);
-        } else if (std::strcmp(argv[i], "--help") == 0) {
+        } else if (arg == "--help") {
             print_usage(argv[0]);
             return 0;
         }
